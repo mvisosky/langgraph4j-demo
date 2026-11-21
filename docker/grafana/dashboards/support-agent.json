@@ -1,0 +1,763 @@
+{
+  "uid": "support-agent",
+  "title": "Support Agent - LLM & Graph Observability",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "refresh": "10s",
+  "tags": [
+    "langgraph4j",
+    "langchain4j",
+    "genai"
+  ],
+  "panels": [
+    {
+      "type": "row",
+      "title": "LLM usage (OpenTelemetry GenAI conventions)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "id": 1
+    },
+    {
+      "type": "timeseries",
+      "title": "LLM calls / min by model",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "stacking": {
+              "mode": "none"
+            },
+            "fillOpacity": 5
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (gen_ai_request_model, agent_model_role) (rate({__name__=~\"gen_ai_client_operation_duration.*_count\"}[5m])) * 60",
+          "legendFormat": "{{gen_ai_request_model}} ({{agent_model_role}})",
+          "refId": "A"
+        }
+      ],
+      "id": 2
+    },
+    {
+      "type": "timeseries",
+      "title": "LLM latency p95 by model",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "stacking": {
+              "mode": "none"
+            },
+            "fillOpacity": 5
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, gen_ai_request_model) (rate({__name__=~\"gen_ai_client_operation_duration.*_bucket\"}[5m])))",
+          "legendFormat": "{{gen_ai_request_model}}",
+          "refId": "A"
+        }
+      ],
+      "id": 3
+    },
+    {
+      "type": "timeseries",
+      "title": "Tokens / min by model and type",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (gen_ai_request_model, gen_ai_token_type) (rate({__name__=~\"gen_ai_client_token_usage.*_sum\"}[5m])) * 60",
+          "legendFormat": "{{gen_ai_request_model}} {{gen_ai_token_type}}",
+          "refId": "A"
+        }
+      ],
+      "id": 4
+    },
+    {
+      "type": "timeseries",
+      "title": "LLM errors / min",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 9,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "stacking": {
+              "mode": "none"
+            },
+            "fillOpacity": 5
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (gen_ai_request_model) (rate({__name__=~\"gen_ai_client_operation_duration.*_count\", outcome=\"error\"}[5m])) * 60",
+          "legendFormat": "{{gen_ai_request_model}}",
+          "refId": "A"
+        }
+      ],
+      "id": 5
+    },
+    {
+      "type": "row",
+      "title": "Graph execution (LangGraph4j nodes)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 17,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "id": 6
+    },
+    {
+      "type": "timeseries",
+      "title": "Node latency p95",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "stacking": {
+              "mode": "none"
+            },
+            "fillOpacity": 5
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, node) (rate({__name__=~\"agent_graph_node.*_bucket\"}[5m])))",
+          "legendFormat": "{{node}}",
+          "refId": "A"
+        }
+      ],
+      "id": 7
+    },
+    {
+      "type": "timeseries",
+      "title": "Node executions / min",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 18,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (node, outcome) (rate({__name__=~\"agent_graph_node.*_count\"}[5m])) * 60",
+          "legendFormat": "{{node}} {{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "id": 8
+    },
+    {
+      "type": "row",
+      "title": "Agent behaviour",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "id": 9
+    },
+    {
+      "type": "barchart",
+      "title": "Routes (last 24h)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 8,
+        "h": 8
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "legend": {
+          "showLegend": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (route) (increase({__name__=~\"agent_route.*\"}[24h]))",
+          "legendFormat": "{{route}}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "reducers": [
+              "lastNotNull"
+            ],
+            "mode": "seriesToRows"
+          }
+        }
+      ],
+      "id": 10
+    },
+    {
+      "type": "barchart",
+      "title": "Guardrail interventions (24h)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 27,
+        "w": 8,
+        "h": 8
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "legend": {
+          "showLegend": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (stage, category) (increase({__name__=~\"agent_guardrail_blocked.*\"}[24h]))",
+          "legendFormat": "{{stage}} {{category}}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "reducers": [
+              "lastNotNull"
+            ],
+            "mode": "seriesToRows"
+          }
+        }
+      ],
+      "id": 11
+    },
+    {
+      "type": "barchart",
+      "title": "Critic verdicts (24h)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 27,
+        "w": 8,
+        "h": 8
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "legend": {
+          "showLegend": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (verdict) (increase({__name__=~\"agent_critic_verdict.*\"}[24h]))",
+          "legendFormat": "{{verdict}}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "reducers": [
+              "lastNotNull"
+            ],
+            "mode": "seriesToRows"
+          }
+        }
+      ],
+      "id": 12
+    },
+    {
+      "type": "barchart",
+      "title": "Refund outcomes (24h)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 8,
+        "h": 8
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "legend": {
+          "showLegend": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (outcome) (increase({__name__=~\"agent_refund.*\"}[24h]))",
+          "legendFormat": "{{outcome}}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "reducers": [
+              "lastNotNull"
+            ],
+            "mode": "seriesToRows"
+          }
+        }
+      ],
+      "id": 13
+    },
+    {
+      "type": "barchart",
+      "title": "Human-in-the-loop events (24h)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 35,
+        "w": 8,
+        "h": 8
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "legend": {
+          "showLegend": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (event) (increase({__name__=~\"agent_hitl.*\"}[24h]))",
+          "legendFormat": "{{event}}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "reducers": [
+              "lastNotNull"
+            ],
+            "mode": "seriesToRows"
+          }
+        }
+      ],
+      "id": 14
+    },
+    {
+      "type": "barchart",
+      "title": "Tickets by priority (24h)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 35,
+        "w": 8,
+        "h": 8
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "legend": {
+          "showLegend": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (priority) (increase({__name__=~\"agent_ticket_created.*\"}[24h]))",
+          "legendFormat": "{{priority}}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "reducers": [
+              "lastNotNull"
+            ],
+            "mode": "seriesToRows"
+          }
+        }
+      ],
+      "id": 15
+    },
+    {
+      "type": "timeseries",
+      "title": "RAG: relevant documents per retrieval (avg) and query rewrites / min",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 43,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "stacking": {
+              "mode": "none"
+            },
+            "fillOpacity": 5
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate({__name__=~\"agent_rag_relevant_documents.*_sum\"}[5m])) / sum(rate({__name__=~\"agent_rag_relevant_documents.*_count\"}[5m]))",
+          "legendFormat": "avg relevant docs",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate({__name__=~\"agent_rag_query_rewrites.*\"}[5m])) * 60",
+          "legendFormat": "rewrites / min",
+          "refId": "B"
+        }
+      ],
+      "id": 16
+    },
+    {
+      "type": "timeseries",
+      "title": "Long-term memory facts written / min",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 43,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "stacking": {
+              "mode": "none"
+            },
+            "fillOpacity": 5
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate({__name__=~\"agent_memory_facts_written.*\"}[5m])) * 60",
+          "legendFormat": "facts",
+          "refId": "A"
+        }
+      ],
+      "id": 17
+    },
+    {
+      "type": "row",
+      "title": "Logs",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 51,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "id": 18
+    },
+    {
+      "type": "logs",
+      "title": "Application logs (click a trace_id to open the trace)",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 52,
+        "w": 24,
+        "h": 10
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{service_name=\"support-agent\"}",
+          "refId": "A"
+        }
+      ],
+      "id": 19
+    }
+  ],
+  "templating": {
+    "list": []
+  }
+}

@@ -1,0 +1,96 @@
+spring:
+  application:
+    name: support-agent
+  datasource:
+    url: jdbc:postgresql://localhost:5432/support
+    username: support
+    password: support
+  sql:
+    init:
+      mode: always   # schema.sql + data.sql (idempotent demo seed)
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: 8080
+
+# ---------------------------------------------------------------------------
+# Agent configuration (see AgentProperties)
+# ---------------------------------------------------------------------------
+agent:
+  provider: anthropic          # anthropic | ollama
+  anthropic:
+    api-key: ${ANTHROPIC_API_KEY:}
+    # Tiered models: the "smart" model does reasoning-heavy work (ReAct agent, answer generation,
+    # critique); the "fast" model does cheap classification (guardrails, routing, grading, extraction).
+    smart-model: claude-sonnet-5-5
+    fast-model: claude-haiku-5-5
+    max-tokens: 2048
+    prompt-caching: true
+  ollama:
+    base-url: http://localhost:11434
+    smart-model: qwen2.5:7b
+    fast-model: llama3.2:3b
+  # Business rules
+  refund:
+    auto-approve-limit: 100.00   # refunds above this pause the graph for human approval
+    window-days: 30
+  reflection:
+    max-revisions: 2
+  rag:
+    max-results: 5            # hybrid search (vector + Postgres full-text, fused with RRF), then LLM grading
+    max-query-rewrites: 2
+  memory:
+    max-recalled: 5
+    min-score: 0.6
+    summarize-after-messages: 16   # older turns get folded into a running summary
+    keep-recent-messages: 6
+  studio:
+    enabled: true
+  observability:
+    capture-content: true   # truncated prompts/responses on LLM spans - disable in production
+
+# ---------------------------------------------------------------------------
+# Observability (Spring Boot 4 OpenTelemetry starter)
+# ---------------------------------------------------------------------------
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  tracing:
+    sampling:
+      probability: 1.0
+  opentelemetry:
+    resource-attributes:
+      service.namespace: acme-support
+      deployment.environment: local
+    tracing:
+      export:
+        otlp:
+          endpoint: http://localhost:4318/v1/traces
+    logging:
+      export:
+        otlp:
+          endpoint: http://localhost:4318/v1/logs
+  otlp:
+    metrics:
+      export:
+        url: http://localhost:4318/v1/metrics
+        step: 10s
+  metrics:
+    distribution:
+      percentiles-histogram:
+        agent.graph.node: true
+        gen_ai.client.operation.duration: true
+  observations:
+    key-values:
+      application: support-agent
+
+logging:
+  pattern:
+    correlation: "[${spring.application.name:},%X{traceId:-},%X{spanId:-}] "
+  level:
+    com.acme.support: INFO
+    org.bsc.langgraph4j: WARN

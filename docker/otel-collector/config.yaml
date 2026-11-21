@@ -1,0 +1,53 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+  # Never ship raw prompts to long-term storage in a real deployment: this is where you would
+  # drop or hash attributes such as gen_ai.prompt / lg4j.state. Kept permissive for the demo.
+  attributes/redact:
+    actions:
+      - key: customer.email
+        action: hash
+
+exporters:
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    resource_to_telemetry_conversion:
+      enabled: true
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+  debug:
+    verbosity: basic
+
+extensions:
+  health_check: {}
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/redact, batch]
+      exporters: [otlp/jaeger]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlphttp/loki]

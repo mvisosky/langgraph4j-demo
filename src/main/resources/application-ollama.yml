@@ -1,0 +1,4 @@
+# Offline mode: docker compose --profile ollama up -d && SPRING_PROFILES_ACTIVE=ollama ./mvnw spring-boot:run
+# Small local models are noticeably less reliable at tool calling and structured output than Claude.
+agent:
+  provider: ollama

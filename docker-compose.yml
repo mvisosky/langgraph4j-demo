@@ -1,0 +1,135 @@
+# Infrastructure for the support-agent demo.
+#
+#   docker compose up -d                       # Postgres/pgvector + full observability stack
+#   docker compose --profile ollama up -d      # ...plus a local Ollama LLM (offline mode)
+#   docker compose --profile app up -d --build # ...plus the Spring Boot service itself
+#
+# UIs:  Jaeger http://localhost:16686 · Grafana http://localhost:3000 · Prometheus http://localhost:9090
+
+name: support-agent
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Data: one Postgres with the pgvector extension serves four roles
+  #   1. transactional data (customers, orders, refunds, tickets)
+  #   2. RAG knowledge base embeddings          (table kb_embeddings)
+  #   3. long-term semantic memory embeddings   (table customer_memory)
+  #   4. LangGraph4j checkpoints = short-term memory + HITL resume (PostgresSaverV2 tables)
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: support
+      POSTGRES_USER: support
+      POSTGRES_PASSWORD: support
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U support -d support"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # ---------------------------------------------------------------------------
+  # Observability: app --OTLP--> collector --> Jaeger (traces), Prometheus (metrics), Loki (logs)
+  # ---------------------------------------------------------------------------
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.139.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./docker/otel-collector/config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP (used by the app)
+      - "8889:8889"   # Prometheus exporter (scraped by Prometheus)
+    depends_on:
+      - jaeger
+      - loki
+
+  jaeger:
+    image: jaegertracing/jaeger:2.10.0
+    ports:
+      - "16686:16686" # UI
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-remote-write-receiver
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  loki:
+    image: grafana/loki:3.5.0
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports:
+      - "3100:3100"
+
+  grafana:
+    image: grafana/grafana:12.2.0
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - jaeger
+      - loki
+
+  # ---------------------------------------------------------------------------
+  # Optional: local LLM for offline runs (SPRING_PROFILES_ACTIVE=ollama).
+  # On macOS, Docker cannot use the GPU - prefer a native Ollama install instead.
+  # ---------------------------------------------------------------------------
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+
+  ollama-pull:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c", "sleep 5 && ollama pull qwen2.5:7b && ollama pull llama3.2:3b"]
+    restart: "no"
+
+  # ---------------------------------------------------------------------------
+  # Optional: the service itself
+  # ---------------------------------------------------------------------------
+  support-agent:
+    build: .
+    profiles: ["app"]
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/support
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      MANAGEMENT_OPENTELEMETRY_LOGGING_EXPORT_OTLP_ENDPOINT: http://otel-collector:4318/v1/logs
+      MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://otel-collector:4318/v1/metrics
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+volumes:
+  pgdata:
+  ollama:
