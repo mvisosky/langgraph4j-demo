@@ -25,7 +25,7 @@
         <langchain4j.version>1.23.0</langchain4j.version>
         <!-- LangGraph4j's Jackson serializers are built on Jackson 2 (com.fasterxml), declared "provided" upstream -->
         <jackson2.version>2.21.1</jackson2.version>
-        <otel-logback-appender.version>2.21.0-alpha</otel-logback-appender.version>
+        <otel-logback-appender.version>2.28.1-alpha</otel-logback-appender.version>
     </properties>
 
     <dependencyManagement>
