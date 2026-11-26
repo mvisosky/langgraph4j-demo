@@ -20,7 +20,7 @@
     </description>
 
     <properties>
-        <java.version>21</java.version>
+        <java.version>25</java.version>
         <langgraph4j.version>1.9.10</langgraph4j.version>
         <langchain4j.version>1.23.0</langchain4j.version>
         <!-- LangGraph4j's Jackson serializers are built on Jackson 2 (com.fasterxml), declared "provided" upstream -->

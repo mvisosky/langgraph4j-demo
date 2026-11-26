@@ -1,0 +1,24 @@
+{
+  "name": "support-agent (Java 25)",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "25",
+      "jdkDistro": "ms",
+      "installMaven": "true",
+      "mavenVersion": "latest"
+    },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+  },
+  "forwardPorts": [8080],
+  "mounts": [
+    "source=support-agent-m2,target=/home/vscode/.m2,type=volume",
+    "source=support-agent-target,target=/workspaces/langgraph4j-demo/target,type=volume"
+  ],
+  "postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.m2 /workspaces/langgraph4j-demo/target",
+  "customizations": {
+    "vscode": {
+      "extensions": ["vscjava.vscode-java-pack", "vmware.vscode-boot-dev-pack"]
+    }
+  }
+}

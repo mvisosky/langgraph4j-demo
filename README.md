@@ -74,7 +74,7 @@ flowchart TD
 
 ## Quick start
 
-Prerequisites: Java 21, Docker, and an Anthropic API key.
+Prerequisites: Java 25 (LTS), Docker, and an Anthropic API key.
 
 ```bash
 docker compose up -d                       # Postgres/pgvector, OTel collector, Jaeger, Prometheus, Loki, Grafana
@@ -217,4 +217,4 @@ docker/              Collector, Prometheus and Grafana provisioning (datasources
 
 ## Versions
 
-LangGraph4j 1.9.10 · LangChain4j 1.23.0 · Spring Boot 4.1.1 · Java 21 · Claude Sonnet 5.5 / Haiku 5.5
+LangGraph4j 1.9.10 · LangChain4j 1.23.0 · Spring Boot 4.1.1 · Java 25 · Claude Sonnet 5.5 / Haiku 5.5
