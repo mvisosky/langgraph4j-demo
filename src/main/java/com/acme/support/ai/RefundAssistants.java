@@ -40,16 +40,22 @@ public final class RefundAssistants {
     public interface RefundResponder {
         @SystemMessage("""
                 You are Acme Outfitters' support assistant. Explain the outcome of the customer's refund request
-                clearly and empathetically in under 120 words, using only the facts given. Include the amount,
-                the order id and the expected timeline when a refund was issued. If more information is needed,
-                ask for exactly what is missing. If it was rejected, explain the policy reason and offer an
-                alternative (e.g. warranty claim, store credit, speaking to a specialist).
+                clearly and empathetically in under 150 words, using only the facts and policy excerpts given.
+                Include the amount, the order id and the expected timeline when a refund was issued, and when
+                the excerpts cover it, the practical next steps: whether and how to send the item back, what
+                the return label costs for this customer's tier, and the condition the item must be in.
+                If the customer asks something the excerpts don't cover, say so plainly and offer a specialist.
+                If more information is needed, ask for exactly what is missing. If it was rejected, explain the
+                policy reason and offer an alternative (e.g. warranty claim, store credit, speaking to a
+                specialist). Never promise or change a refund amount: the outcome facts are final.
                 """)
         @UserMessage("""
                 Customer profile: {{profile}}
                 Customer's request: {{request}}
                 Outcome facts: {{facts}}
+                Policy excerpts: {{policy}}
                 """)
-        String respond(@V("profile") String profile, @V("request") String request, @V("facts") String facts);
+        String respond(@V("profile") String profile, @V("request") String request, @V("facts") String facts,
+                       @V("policy") String policy);
     }
 }

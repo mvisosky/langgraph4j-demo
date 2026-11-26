@@ -6,6 +6,7 @@ import com.acme.support.domain.RefundPolicyService;
 import com.acme.support.domain.RefundPolicyService.Outcome;
 import com.acme.support.domain.SupportRepository;
 import com.acme.support.graph.SupportState;
+import com.acme.support.knowledge.PolicySearch;
 import com.acme.support.observability.AgentMetrics;
 import org.bsc.langgraph4j.RunnableConfig;
 import org.bsc.langgraph4j.action.NodeActionWithConfig;
@@ -34,17 +35,20 @@ public class RefundAgentNode implements NodeActionWithConfig<SupportState> {
     private final RefundAssistants.RefundResponder responder;
     private final RefundPolicyService policy;
     private final SupportRepository repository;
+    private final PolicySearch policySearch;
     private final AgentMetrics metrics;
 
     public RefundAgentNode(RefundAssistants.RefundRequestExtractor extractor,
                            RefundAssistants.RefundResponder responder,
                            RefundPolicyService policy,
                            SupportRepository repository,
+                           PolicySearch policySearch,
                            AgentMetrics metrics) {
         this.extractor = extractor;
         this.responder = responder;
         this.policy = policy;
         this.repository = repository;
+        this.policySearch = policySearch;
         this.metrics = metrics;
     }
 
@@ -79,8 +83,13 @@ public class RefundAgentNode implements NodeActionWithConfig<SupportState> {
             metrics.humanApproval("requested");
         }
         if (decision.outcome() == Outcome.INELIGIBLE || decision.outcome() == Outcome.NEEDS_INFO) {
-            update.put(DRAFT, responder.respond(customer.promptProfile(), state.lastUserText(),
-                    "%s: %s".formatted(decision.outcome(), decision.note())));
+            String profile = customer.promptProfile();
+            String excerpts = policySearch.excerpts(decision.note() + " " + state.lastUserText());
+            update.put(DRAFT, responder.respond(profile, state.lastUserText(),
+                    "%s: %s".formatted(decision.outcome(), decision.note()), excerpts));
+            // the critic sees only EVIDENCE: it must hold everything the responder was allowed to use
+            update.put(EVIDENCE, evidence + "\nCustomer profile (from our records): " + profile
+                    + ("none".equals(excerpts) ? "" : "\nPolicy excerpts:\n" + excerpts));
         }
         return update;
     }

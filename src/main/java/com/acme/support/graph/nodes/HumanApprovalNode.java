@@ -3,6 +3,7 @@ package com.acme.support.graph.nodes;
 import com.acme.support.ai.RefundAssistants;
 import com.acme.support.domain.SupportRepository;
 import com.acme.support.graph.SupportState;
+import com.acme.support.knowledge.PolicySearch;
 import com.acme.support.observability.AgentMetrics;
 import org.bsc.langgraph4j.RunnableConfig;
 import org.bsc.langgraph4j.action.NodeActionWithConfig;
@@ -27,11 +28,14 @@ public class HumanApprovalNode implements NodeActionWithConfig<SupportState> {
 
     private final RefundAssistants.RefundResponder responder;
     private final SupportRepository repository;
+    private final PolicySearch policySearch;
     private final AgentMetrics metrics;
 
-    public HumanApprovalNode(RefundAssistants.RefundResponder responder, SupportRepository repository, AgentMetrics metrics) {
+    public HumanApprovalNode(RefundAssistants.RefundResponder responder, SupportRepository repository,
+                             PolicySearch policySearch, AgentMetrics metrics) {
         this.responder = responder;
         this.repository = repository;
+        this.policySearch = policySearch;
         this.metrics = metrics;
     }
 
@@ -55,10 +59,15 @@ public class HumanApprovalNode implements NodeActionWithConfig<SupportState> {
 
         String facts = "A refund specialist reviewed the $%s refund for order %s and declined it. Reviewer note: %s"
                 .formatted(amount, orderId, note.isBlank() ? "(none)" : note);
+        String profile = state.str(CUSTOMER_PROFILE).orElse("");
+        String excerpts = policySearch.excerpts("refund declined, alternatives: warranty claim, store credit, specialist");
         var update = new HashMap<String, Object>(update("human_approval: REJECTED by " + approver,
                 APPROVAL_DECISION, "REJECTED",
-                EVIDENCE, state.str(EVIDENCE).orElse("") + "\n" + facts));
-        update.put(DRAFT, responder.respond(state.str(CUSTOMER_PROFILE).orElse(""), state.lastUserText(), facts));
+                // the critic sees only EVIDENCE: it must hold everything the responder was allowed to use
+                EVIDENCE, state.str(EVIDENCE).orElse("") + "\n" + facts
+                        + "\nCustomer profile (from our records): " + profile
+                        + ("none".equals(excerpts) ? "" : "\nPolicy excerpts:\n" + excerpts)));
+        update.put(DRAFT, responder.respond(profile, state.lastUserText(), facts, excerpts));
         return update;
     }
 }

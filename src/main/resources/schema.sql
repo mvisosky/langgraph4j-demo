@@ -66,8 +66,20 @@ CREATE TABLE IF NOT EXISTS kb_ingestion (
 -- Conversation threads (thread id = LangGraph4j checkpoint thread id) and the customer that owns each one
 CREATE TABLE IF NOT EXISTS conversations (
     thread_id   VARCHAR(64) PRIMARY KEY,
-    customer_id VARCHAR(16) NOT NULL REFERENCES customers(id),
+    customer_id VARCHAR(16) REFERENCES customers(id),   -- NULL until the customer is verified in the chat
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE conversations ALTER COLUMN customer_id DROP NOT NULL;   -- upgrade path for existing databases
+
+-- In-chat identity verification (email + one-time code). code_hash is NULL when no code is active, including when
+-- the email matched no customer (so known and unknown emails are indistinguishable). issued_count caps code requests.
+CREATE TABLE IF NOT EXISTS identity_challenges (
+    thread_id    VARCHAR(64) PRIMARY KEY REFERENCES conversations(thread_id),
+    customer_id  VARCHAR(16) REFERENCES customers(id),
+    code_hash    VARCHAR(64),
+    expires_at   TIMESTAMPTZ NOT NULL,
+    attempts     INT         NOT NULL DEFAULT 0,
+    issued_count INT         NOT NULL DEFAULT 1
 );
 
 -- Approval queue for human-in-the-loop: runs paused before the human_approval node

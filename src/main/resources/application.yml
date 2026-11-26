@@ -36,6 +36,12 @@ agent:
   refund:
     auto-approve-limit: 100.00   # refunds above this pause the graph for human approval
     window-days: 30
+  # In-chat identity verification for conversations started without a customer id (email + one-time code)
+  identity:
+    code-ttl: 10m
+    max-attempts: 3              # wrong codes before the challenge is invalidated
+    max-codes: 3                 # code requests per conversation
+    log-code: true               # DEMO ONLY: log the code instead of emailing it
   reflection:
     max-revisions: 2
   rag:

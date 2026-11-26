@@ -37,6 +37,7 @@ class SupportGraphWiringTest {
 
     InputGuardrailNode inputGuardrail = mock(InputGuardrailNode.class);
     BlockedResponseNode blockedResponse = mock(BlockedResponseNode.class);
+    IdentifyCustomerNode identifyCustomer = mock(IdentifyCustomerNode.class);
     CustomerContextNode customerContext = mock(CustomerContextNode.class);
     RecallMemoryNode recallMemory = mock(RecallMemoryNode.class);
     SupervisorNode supervisor = mock(SupervisorNode.class);
@@ -62,14 +63,16 @@ class SupportGraphWiringTest {
                 new AgentProperties.Rag(5, 2),
                 new AgentProperties.Memory(5, 0.6, 16, 6),
                 new AgentProperties.Studio(false),
-                new AgentProperties.Observability(false));
+                new AgentProperties.Observability(false),
+                new AgentProperties.Identity(java.time.Duration.ofMinutes(10), 3, 3, false));
         var serializer = new LC4jJacksonStateSerializer<SupportState>(SupportState::new);
         var meters = new SimpleMeterRegistry();
         var rag = new KnowledgeRagSubgraph(mock(RagAssistants.QueryRewriter.class), mock(RagAssistants.DocumentGrader.class),
                 mock(RagAssistants.GroundedAnswerWriter.class), (EmbeddingStore<TextSegment>) mock(EmbeddingStore.class),
-                mock(EmbeddingModel.class), props, new AgentMetrics(meters));
+                mock(EmbeddingModel.class), mock(com.acme.support.domain.SupportRepository.class), props,
+                new AgentMetrics(meters));
 
-        var factory = new SupportGraphFactory(serializer, rag, inputGuardrail, blockedResponse, customerContext,
+        var factory = new SupportGraphFactory(serializer, rag, inputGuardrail, blockedResponse, identifyCustomer, customerContext,
                 recallMemory, supervisor, orderAgent, refundAgent, humanApproval, issueRefund, escalation, smallTalk,
                 critic, reviser, outputGuardrail, memoryWriter, OpenTelemetry.noop(), meters, props);
 
@@ -131,6 +134,35 @@ class SupportGraphWiringTest {
         assertThat(graph.stateOf(config).orElseThrow().state().str(FINAL_ANSWER)).contains("Sorry, I can't help with that request.");
         verify(supervisor, never()).apply(any(), any());
         verify(customerContext, never()).apply(any(), any());
+    }
+
+    @Test
+    void anonymousConversationOnlyReachesIdentityCheckThenUnlocksOnceVerified() throws Exception {
+        when(identifyCustomer.apply(any(), any()))
+                .thenReturn(Map.of(FINAL_ANSWER, "What's your email?", MESSAGES, List.of(AiMessage.from("What's your email?"))))
+                .thenReturn(Map.of(CUSTOMER_ID, "C-1002", FINAL_ANSWER, "Verified",
+                        MESSAGES, List.of(AiMessage.from("Verified"))));
+        when(supervisor.apply(any(), any())).thenReturn(Map.of(ROUTE, "SMALLTALK"));
+        when(smallTalk.apply(any(), any())).thenReturn(Map.of(DRAFT, "Hi Bob!"));
+        var config = RunnableConfig.builder().threadId("t-anonymous").build();
+
+        // no customer id in the input: the pipeline must stop at identify_customer
+        var anonymous = GraphInput.args(Map.of(MESSAGES, List.of(UserMessage.from("hi"))));
+        graph.invoke(anonymous, config);
+        assertThat(graph.stateOf(config).orElseThrow().state().str(FINAL_ANSWER)).contains("What's your email?");
+        verify(supervisor, never()).apply(any(), any());
+        verify(customerContext, never()).apply(any(), any());
+        verify(orderAgent, never()).apply(any(), any());
+
+        // verification succeeds: customer id lands in checkpointed state ...
+        graph.invoke(GraphInput.args(Map.of(MESSAGES, List.of(UserMessage.from("123456")))), config);
+        assertThat(graph.stateOf(config).orElseThrow().state().str(CUSTOMER_ID)).contains("C-1002");
+        verify(supervisor, never()).apply(any(), any());
+
+        // ... so the next turn runs the normal pipeline, even though the input carries no customer id
+        graph.invoke(GraphInput.args(Map.of(MESSAGES, List.of(UserMessage.from("hello")))), config);
+        verify(supervisor, times(1)).apply(any(), any());
+        verify(identifyCustomer, times(2)).apply(any(), any());
     }
 
     @Test

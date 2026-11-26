@@ -3,6 +3,7 @@ package com.acme.support.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 
 /**
  * Typed configuration for the agent ({@code agent.*} in application.yml).
@@ -17,7 +18,14 @@ public record AgentProperties(
         Rag rag,
         Memory memory,
         Studio studio,
-        Observability observability) {
+        Observability observability,
+        Identity identity) {
+
+    /**
+     * In-chat identity verification. logCode: write the one-time code to the application log instead of emailing it
+     * (demo only - there is no mail infrastructure).
+     */
+    public record Identity(Duration codeTtl, int maxAttempts, int maxCodes, boolean logCode) {}
 
     public record Anthropic(String apiKey, String smartModel, String fastModel, Integer maxTokens, boolean promptCaching) {}
 

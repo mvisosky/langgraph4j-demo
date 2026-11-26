@@ -19,11 +19,14 @@ public class SupportController {
         this.service = service;
     }
 
-    /** Start a conversation thread for a customer (a real system would take the customer from the auth token). */
+    /**
+     * Start a conversation thread. A customer id is optional: with one the thread is pre-verified (a real system
+     * would take it from the auth token); without one the agent verifies the customer in the chat.
+     */
     @PostMapping("/conversations")
     @ResponseStatus(HttpStatus.CREATED)
-    public ConversationStarted start(@Valid @RequestBody StartConversationRequest request) {
-        return service.startConversation(request.customerId());
+    public ConversationStarted start(@Valid @RequestBody(required = false) StartConversationRequest request) {
+        return service.startConversation(request == null ? null : request.customerId());
     }
 
     /** Send a customer message and wait for the agent's answer. */

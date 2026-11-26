@@ -35,6 +35,62 @@ public class SupportRepository {
                 .optional();
     }
 
+    public Optional<Customer> customerByEmail(String email) {
+        return jdbc.sql("SELECT id, name, email, tier FROM customers WHERE lower(email) = lower(:email)")
+                .param("email", email)
+                .query((rs, n) -> new Customer(rs.getString("id"), rs.getString("name"),
+                        rs.getString("email"), Tier.valueOf(rs.getString("tier"))))
+                .optional();
+    }
+
+    /** Binds an anonymous conversation to a verified customer. Only ever sets an unowned thread. */
+    public boolean bindConversation(String threadId, String customerId) {
+        return jdbc.sql("UPDATE conversations SET customer_id = :c WHERE thread_id = :t AND customer_id IS NULL")
+                .param("c", customerId).param("t", threadId).update() == 1;
+    }
+
+    // ------------------------------------------------------------------ identity challenges
+
+    /** An in-chat verification challenge; {@code codeHash} is null when no code is currently active. */
+    public record IdentityChallenge(String customerId, String codeHash, OffsetDateTime expiresAt,
+                                    int attempts, int issuedCount) {}
+
+    public Optional<IdentityChallenge> challenge(String threadId) {
+        return jdbc.sql("SELECT customer_id, code_hash, expires_at, attempts, issued_count "
+                        + "FROM identity_challenges WHERE thread_id = :t")
+                .param("t", threadId)
+                .query((rs, n) -> new IdentityChallenge(rs.getString("customer_id"), rs.getString("code_hash"),
+                        rs.getObject("expires_at", OffsetDateTime.class), rs.getInt("attempts"),
+                        rs.getInt("issued_count")))
+                .optional();
+    }
+
+    /** Stores a new code (or none, for an unknown email), resetting attempts and counting the issuance. */
+    public void saveChallenge(String threadId, String customerId, String codeHash, OffsetDateTime expiresAt) {
+        jdbc.sql("""
+                        INSERT INTO identity_challenges (thread_id, customer_id, code_hash, expires_at)
+                        VALUES (:t, :c, :h, :e)
+                        ON CONFLICT (thread_id) DO UPDATE SET customer_id = :c, code_hash = :h, expires_at = :e,
+                            attempts = 0, issued_count = identity_challenges.issued_count + 1""")
+                .param("t", threadId).param("c", customerId).param("h", codeHash).param("e", expiresAt)
+                .update();
+    }
+
+    public void recordFailedAttempt(String threadId) {
+        jdbc.sql("UPDATE identity_challenges SET attempts = attempts + 1 WHERE thread_id = :t")
+                .param("t", threadId).update();
+    }
+
+    /** Invalidates the active code but keeps the row so the issue cap still applies. */
+    public void invalidateChallenge(String threadId) {
+        jdbc.sql("UPDATE identity_challenges SET code_hash = NULL WHERE thread_id = :t")
+                .param("t", threadId).update();
+    }
+
+    public void deleteChallenge(String threadId) {
+        jdbc.sql("DELETE FROM identity_challenges WHERE thread_id = :t").param("t", threadId).update();
+    }
+
     public List<Order> orders(String customerId) {
         return jdbc.sql("SELECT * FROM orders WHERE customer_id = :cid ORDER BY placed_at DESC")
                 .param("cid", customerId)

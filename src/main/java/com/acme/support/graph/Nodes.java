@@ -9,6 +9,7 @@ public final class Nodes {
     public static final String START_TURN = "start_turn";
     public static final String INPUT_GUARDRAIL = "input_guardrail";
     public static final String BLOCKED_RESPONSE = "blocked_response";
+    public static final String IDENTIFY_CUSTOMER = "identify_customer"; // in-chat email + code verification
     public static final String LOAD_CONTEXT = "load_context";          // fan-out point (parallel branch)
     public static final String LOAD_CUSTOMER = "load_customer";
     public static final String RECALL_MEMORY = "recall_memory";

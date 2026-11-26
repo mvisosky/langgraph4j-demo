@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acme Support</title>
+  <link rel="stylesheet" href="/chat/styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">▲</span>
+        <div>
+          <h1>Acme Outfitters Support</h1>
+          <p class="sub">Ask about orders, returns, shipping and more</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <span id="identity" class="chip chip-warn" title="Who the agent thinks you are">Not verified</span>
+        <button id="specialistToggle" class="btn btn-ghost" aria-expanded="false" aria-controls="specialist">
+          Specialist console <span id="approvalCount" class="badge" hidden>0</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="chat" aria-label="Conversation">
+        <div id="log" class="log" role="log" aria-live="polite"></div>
+
+        <div id="progress" class="progress" hidden>
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span id="progressText">Thinking…</span>
+        </div>
+
+        <div id="banner" class="banner" hidden></div>
+
+        <form id="composer" class="composer" autocomplete="off">
+          <label class="sr-only" for="input">Message</label>
+          <textarea id="input" rows="1" maxlength="8000" placeholder="Type your message…" required></textarea>
+          <button id="send" class="btn btn-primary" type="submit">Send</button>
+        </form>
+
+        <div class="chat-foot">
+          <button id="newChat" class="link" type="button">New conversation</button>
+          <span class="sep">·</span>
+          <label class="inline">Start as
+            <select id="startAs">
+              <option value="">anonymous (verify by email)</option>
+              <option value="C-1001">Alice Martin (C-1001)</option>
+              <option value="C-1002">Bob Nguyen (C-1002)</option>
+              <option value="C-1003">Carol Dubois (C-1003)</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <aside id="specialist" class="specialist" hidden aria-label="Specialist console">
+        <h2>Refund approvals</h2>
+        <p class="hint">Refunds above the auto-approve limit wait here for a specialist.</p>
+        <label class="inline stack">Your name
+          <input id="approver" type="text" value="specialist@acme.example" maxlength="120">
+        </label>
+        <div id="approvals" class="approvals"></div>
+      </aside>
+    </main>
+  </div>
+  <script src="/chat/app.js"></script>
+</body>
+</html>

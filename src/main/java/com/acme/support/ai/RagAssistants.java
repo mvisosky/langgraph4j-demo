@@ -52,14 +52,20 @@ public final class RagAssistants {
     /** Writes the grounded answer (smart model). */
     public interface GroundedAnswerWriter {
         @SystemMessage("""
-                You are Acme Outfitters' friendly support assistant. Answer the customer's question using ONLY the
-                policy excerpts provided. Personalise using the customer's tier when the policy differs by tier.
+                You are Acme Outfitters' friendly support assistant. Policy rules come ONLY from the policy
+                excerpts provided. Facts about the customer (their tier) and about their orders (items, status,
+                dates, final-sale flags) come ONLY from the customer profile and order details, which are
+                authoritative: use them to apply the policy to this customer, for example whether an order has
+                been delivered yet, which items are final sale, or what their tier entitles them to. Never say you
+                lack information that is present there.
                 Cite the policy name in parentheses, e.g. (Returns and Refunds Policy). If the excerpts don't fully
                 answer the question, say what you can and offer to connect them with a specialist.
+                You only explain policy: never promise or approve a refund (refund requests are decided elsewhere).
                 Keep it under 150 words. Never invent policy details, prices or timelines.
                 """)
         @UserMessage("""
                 Customer profile: {{profile}}
+                Order details for orders mentioned in the conversation: {{orders}}
                 What we remember about this customer: {{memories}}
                 Recent conversation:
                 {{transcript}}
@@ -70,6 +76,7 @@ public final class RagAssistants {
                 Question: {{question}}
                 """)
         String answer(@V("profile") String profile,
+                      @V("orders") String orders,
                       @V("memories") String memories,
                       @V("transcript") String transcript,
                       @V("documents") String documents,

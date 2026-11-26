@@ -108,6 +108,9 @@ public class OrderAgentNode implements NodeActionWithConfig<SupportState> {
                 .toList();
         String evidence = toolResults.isEmpty() ? "No tool calls were made."
                 : toolResults.stream().map(t -> "%s → %s".formatted(t.toolName(), t.text())).collect(Collectors.joining("\n"));
+        // the critic sees only the evidence: include the profile the agent was given (name, tier), or it flags
+        // a correctly personalised reply ("Hi Alice", "as a Gold member") as unsupported
+        evidence += "\nCustomer profile (from our records): " + state.str(CUSTOMER_PROFILE).orElse("unknown");
 
         return update("order_agent: %d tool call(s): %s".formatted(toolResults.size(),
                         toolResults.stream().map(ToolExecutionResultMessage::toolName).distinct().toList()),

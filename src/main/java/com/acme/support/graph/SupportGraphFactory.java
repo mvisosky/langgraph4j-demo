@@ -33,6 +33,7 @@ import static org.bsc.langgraph4j.action.AsyncNodeActionWithConfig.node_async;
  *
  * <pre>
  * START → start_turn → input_guardrail ─┬─ BLOCK → blocked_response → END
+ *                                       ├─ ANONYMOUS → identify_customer (email + one-time code) → END
  *                                       └─ ALLOW → load_context ═╦═ load_customer ═╗   (parallel fan-out / fan-in)
  *                                                                 ╚═ recall_memory ═╩═ supervisor
  * supervisor ─┬─ KNOWLEDGE    → knowledge_agent (corrective-RAG sub-graph) ─────────────┐
@@ -56,6 +57,7 @@ public class SupportGraphFactory {
     private final KnowledgeRagSubgraph knowledgeRag;
     private final InputGuardrailNode inputGuardrail;
     private final BlockedResponseNode blockedResponse;
+    private final IdentifyCustomerNode identifyCustomer;
     private final CustomerContextNode customerContext;
     private final RecallMemoryNode recallMemory;
     private final SupervisorNode supervisor;
@@ -76,6 +78,7 @@ public class SupportGraphFactory {
                                KnowledgeRagSubgraph knowledgeRag,
                                InputGuardrailNode inputGuardrail,
                                BlockedResponseNode blockedResponse,
+                               IdentifyCustomerNode identifyCustomer,
                                CustomerContextNode customerContext,
                                RecallMemoryNode recallMemory,
                                SupervisorNode supervisor,
@@ -96,6 +99,7 @@ public class SupportGraphFactory {
         this.knowledgeRag = knowledgeRag;
         this.inputGuardrail = inputGuardrail;
         this.blockedResponse = blockedResponse;
+        this.identifyCustomer = identifyCustomer;
         this.customerContext = customerContext;
         this.recallMemory = recallMemory;
         this.supervisor = supervisor;
@@ -143,6 +147,7 @@ public class SupportGraphFactory {
                 }))
                 .addNode(INPUT_GUARDRAIL, node_async(inputGuardrail))
                 .addNode(BLOCKED_RESPONSE, node_async(blockedResponse))
+                .addNode(IDENTIFY_CUSTOMER, node_async(identifyCustomer))
                 .addNode(LOAD_CONTEXT, node_async((state, config) ->
                         update("load_context: fan-out (customer profile ∥ memory recall)")))
                 .addNode(LOAD_CUSTOMER, parallelBranch(LOAD_CUSTOMER, customerContext))
@@ -164,12 +169,20 @@ public class SupportGraphFactory {
                 .addEdge(START, START_TURN)
                 .addEdge(START_TURN, INPUT_GUARDRAIL)
                 .addConditionalEdges(INPUT_GUARDRAIL,
-                        edge_async(state -> state.str(GUARDRAIL_VERDICT).orElse("ALLOW")),
+                        edge_async(state -> {
+                            if ("BLOCK".equals(state.str(GUARDRAIL_VERDICT).orElse("ALLOW"))) {
+                                return "BLOCK";
+                            }
+                            // no verified customer yet: only the identity check may run
+                            return state.value(CUSTOMER_ID).isEmpty() ? "ANONYMOUS" : "ALLOW";
+                        }),
                         EdgeMappings.builder()
                                 .to(BLOCKED_RESPONSE, "BLOCK")
+                                .to(IDENTIFY_CUSTOMER, "ANONYMOUS")
                                 .to(LOAD_CONTEXT, "ALLOW")
                                 .build())
                 .addEdge(BLOCKED_RESPONSE, END)
+                .addEdge(IDENTIFY_CUSTOMER, END)
 
                 // parallel fan-out / fan-in (executor supplied per run via RunnableConfig.addParallelNodeExecutor)
                 .addEdge(LOAD_CONTEXT, LOAD_CUSTOMER)

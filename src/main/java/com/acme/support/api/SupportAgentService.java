@@ -24,8 +24,10 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 
@@ -57,16 +59,25 @@ public class SupportAgentService {
 
     // ------------------------------------------------------------------ conversations
 
+    /**
+     * Starts a conversation. With a customer id the conversation is pre-verified (e.g. from an auth token);
+     * without one it starts anonymous and the agent verifies the customer in the chat (email + one-time code).
+     */
     public ConversationStarted startConversation(String customerId) {
-        boolean exists = jdbc.sql("SELECT count(*) FROM customers WHERE id = :id").param("id", customerId)
-                .query(Long.class).single() > 0;
-        if (!exists) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown customer " + customerId);
+        if (customerId != null && customerId.isBlank()) {
+            customerId = null;
+        }
+        if (customerId != null) {
+            boolean exists = jdbc.sql("SELECT count(*) FROM customers WHERE id = :id").param("id", customerId)
+                    .query(Long.class).single() > 0;
+            if (!exists) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown customer " + customerId);
+            }
         }
         String threadId = UUID.randomUUID().toString();
         jdbc.sql("INSERT INTO conversations (thread_id, customer_id) VALUES (:t, :c)")
                 .param("t", threadId).param("c", customerId).update();
-        return new ConversationStarted(threadId, customerId);
+        return new ConversationStarted(threadId, customerId, firstNameOf(customerId));
     }
 
     public TurnResult sendMessage(String threadId, String message) {
@@ -133,7 +144,7 @@ public class SupportAgentService {
         var config = runConfig(threadId);
         var snapshot = graph.stateOf(config);
         if (snapshot.isEmpty()) {
-            return new ConversationView(threadId, customerId, 0, false, null, List.of());
+            return new ConversationView(threadId, customerId, firstNameOf(customerId), 0, false, null, List.of());
         }
         var state = snapshot.get().state();
         var messages = state.messages().stream()
@@ -143,7 +154,7 @@ public class SupportAgentService {
                     default -> new Message(m.type().name().toLowerCase(), "");
                 })
                 .toList();
-        return new ConversationView(threadId, customerId, state.integer(TURN), awaitingApproval(config),
+        return new ConversationView(threadId, customerId, firstNameOf(customerId), state.integer(TURN), awaitingApproval(config),
                 state.str(CONVERSATION_SUMMARY).orElse(null), messages);
     }
 
@@ -171,9 +182,14 @@ public class SupportAgentService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "A refund on this conversation is awaiting specialist approval; please wait for the decision.");
         }
-        return GraphInput.args(Map.of(
-                MESSAGES, List.of(UserMessage.from(message)),
-                CUSTOMER_ID, customerId));
+        // The owner comes from the database, never the client. Anonymous threads send no customer id at all, which
+        // routes the graph to identify_customer until verification binds the thread to a customer.
+        var input = new HashMap<String, Object>();
+        input.put(MESSAGES, List.of(UserMessage.from(message)));
+        if (customerId != null) {
+            input.put(CUSTOMER_ID, customerId);
+        }
+        return GraphInput.args(input);
     }
 
     /**
@@ -195,10 +211,23 @@ public class SupportAgentService {
                 .orElse(false);
     }
 
-    private String ownerOf(String threadId) {
-        return jdbc.sql("SELECT customer_id FROM conversations WHERE thread_id = :t").param("t", threadId)
+    /** First name for greetings, or null for an anonymous conversation. */
+    private String firstNameOf(String customerId) {
+        if (customerId == null) {
+            return null;
+        }
+        return jdbc.sql("SELECT name FROM customers WHERE id = :id").param("id", customerId)
                 .query(String.class).optional()
+                .map(name -> name.split(" ")[0])
+                .orElse(null);
+    }
+
+    /** The verified customer of the thread, or null while the conversation is still anonymous. */
+    private String ownerOf(String threadId) {
+        var row = jdbc.sql("SELECT customer_id FROM conversations WHERE thread_id = :t").param("t", threadId)
+                .query((rs, n) -> Optional.ofNullable(rs.getString("customer_id"))).optional()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown conversation " + threadId));
+        return row.orElse(null);
     }
 
     private TurnResult result(String threadId, RunnableConfig config) {

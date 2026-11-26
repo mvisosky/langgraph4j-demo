@@ -30,3 +30,19 @@ delivery or return the parcel after it arrives.
 ## Return shipping
 Return labels are free for Gold and Platinum members. Standard members pay a flat $6.95 return fee deducted from
 the refund, except when the return is due to our error.
+
+## How to return an item
+1. Pack the item in its original packaging with tags attached, and include your order number (a note is fine if you
+   no longer have the packing slip).
+2. Get your return label. Gold and Platinum members receive a prepaid label by email once the refund is approved.
+   Standard members can print one from **My Account > Orders > Return item**; the $6.95 return fee is deducted from
+   the refund.
+3. Attach the label and drop the parcel at any carrier location. No appointment is needed.
+4. Send it within **14 days of the refund being approved**, and keep the carrier receipt until the refund appears on
+   your statement.
+
+## Does the refund depend on sending the item back?
+Refunds are issued as soon as they are approved: you do not have to wait for us to receive the item. In return we
+expect the item to be sent back within 14 days of approval. If a returned item has not reached us within 30 days of
+approval, or arrives in a condition that breaks the rules above (for example used footwear), we may reverse the
+refund. The exception is damaged or wrong items under $25, which you can keep, and items we ask you to dispose of.

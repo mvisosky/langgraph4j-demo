@@ -13,6 +13,7 @@ patterns in one realistic app, run against real infrastructure:
 flowchart TD
     S([START]) --> T[start_turn] --> IG{input_guardrail}
     IG -- BLOCK --> BR[blocked_response] --> E1([END])
+    IG -- ANONYMOUS --> ID[identify_customer · email + one-time code] --> E2([END])
     IG -- ALLOW --> LC[load_context]
     LC --> CU[load_customer] & RM[recall_memory]
     CU & RM --> SUP{supervisor}
@@ -87,6 +88,16 @@ in `src/main/resources/knowledge`. Embeddings run in-process (all-MiniLM-L6-v2),
 
 Work through the scenarios in **`demo.http`**: RAG, a follow-up question, order lookup, a refund that needs
 approval, the approval itself, a blocked injection attempt, escalation, streaming, and memory across conversations.
+**Web UI:** open <http://localhost:8080/chat> for a chat frontend (streamed progress per graph node, in-chat
+identity verification, a "how the agent got here" trace per answer, and a specialist console for approving
+refunds). It's plain static files in `src/main/resources/static/chat`, with no build step. Studio stays at `/`.
+
+**Don't know the customer id?** Start with `{}` and the agent verifies the customer in the chat: send the account
+email, then the 6-digit code (in the demo it appears in the app log: `[DEMO] verification code ...`). Identity is
+decided by code, not the model: no LLM sees the email or code, replies are identical for known and unknown emails,
+codes expire, and wrong guesses and code requests are capped. Until verified, the conversation can't reach orders,
+refunds or memory.
+
 Or with curl:
 
 ```bash
@@ -161,6 +172,10 @@ All settings live under `agent.*` in `application.yml`:
 | `agent.anthropic.prompt-caching` | `true` | Cache system prompts and tool definitions |
 | `agent.refund.auto-approve-limit` | `100.00` | Refunds above this pause for human approval |
 | `agent.reflection.max-revisions` | `2` | Upper bound on critic → reviser loops |
+| `agent.identity.code-ttl` | `10m` | Lifetime of an in-chat verification code |
+| `agent.identity.max-attempts` | `3` | Wrong codes before the code is invalidated |
+| `agent.identity.max-codes` | `3` | Code requests allowed per conversation |
+| `agent.identity.log-code` | `true` | **Demo only:** log the one-time code instead of emailing it |
 | `agent.rag.max-results` / `max-query-rewrites` | `5` / `2` | Retrieval breadth and corrective retries |
 | `agent.memory.summarize-after-messages` | `16` | When to compact the thread into a summary |
 | `agent.studio.enabled` | `true` | Serve LangGraph4j Studio |
@@ -176,7 +191,7 @@ because Docker there has no GPU access.
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/conversations` | Start a thread for a customer |
+| POST | `/api/conversations` | Start a thread. `customerId` is optional: omit it and the agent verifies the customer in the chat |
 | POST | `/api/conversations/{id}/messages` | Send a message and get the answer |
 | POST | `/api/conversations/{id}/messages/stream` | Same, as Server-Sent Events |
 | GET | `/api/conversations/{id}` | Messages, summary and approval status |
@@ -200,13 +215,16 @@ src/main/java/com/acme/support
 ├── memory/          Long-term semantic memory
 ├── observability/   Node tracing hook, LLM telemetry listener, business metrics
 └── tools/           Customer-scoped tools for the ReAct agent
+src/main/resources/static/chat   Chat web UI (HTML, CSS, vanilla JS)
 docker/              Collector, Prometheus and Grafana provisioning (datasources and dashboard)
 ```
 
 ## Production notes (simplifications made for the demo)
 
-- **Authentication.** The customer id is fixed when a conversation starts. A real system takes it from the
-  authenticated principal, and protects the approval endpoints with a specialist role.
+- **Authentication.** The customer id is fixed once a conversation is verified: either supplied at start, or
+  established in the chat with email + one-time code (see below). A real system takes it from the authenticated
+  principal, delivers the code by email/SMS (the demo logs it), and protects the approval endpoints with a
+  specialist role.
 - **Concurrency.** Two messages sent concurrently on the same thread race on the checkpoint. Serialise per thread
   (for example with a lock or a queue).
 - **Latency.** Memory extraction runs inline at the end of each turn. Moving it to an async worker would cut

@@ -13,9 +13,11 @@ public final class ApiModels {
 
     private ApiModels() {}
 
-    public record StartConversationRequest(@NotBlank String customerId) {}
+    /** customerId is optional: omit it and the agent verifies the customer in the chat (email + one-time code). */
+    public record StartConversationRequest(String customerId) {}
 
-    public record ConversationStarted(String threadId, String customerId) {}
+    /** customerId is null for an anonymous conversation until the customer is verified in the chat. */
+    public record ConversationStarted(String threadId, String customerId, String firstName) {}
 
     public record MessageRequest(@NotBlank @Size(max = 8000) String message) {}
 
@@ -40,7 +42,7 @@ public final class ApiModels {
 
     public record Message(String role, String text) {}
 
-    public record ConversationView(String threadId, String customerId, int turn, boolean awaitingApproval,
+    public record ConversationView(String threadId, String customerId, String firstName, int turn, boolean awaitingApproval,
                                    String conversationSummary, List<Message> messages) {}
 
     public record CheckpointView(String checkpointId, String node, String nextNode, Instant savedAt) {}

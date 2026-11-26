@@ -57,6 +57,13 @@ public class InputGuardrailNode implements NodeActionWithConfig<SupportState> {
                     GUARDRAIL_VERDICT, "BLOCK", GUARDRAIL_REASON, heuristic.get());
         }
 
+        // Unverified conversation: the only thing that happens is the deterministic identity check, so there is
+        // no LLM call to protect - and the email/code the customer types never reach a model.
+        if (state.value(CUSTOMER_ID).isEmpty()) {
+            return update("input_guardrail: ALLOW (unverified customer - rules only)",
+                    GUARDRAIL_VERDICT, "ALLOW", GUARDRAIL_REASON, "ANONYMOUS");
+        }
+
         try {
             InputGuard.Verdict verdict = guard.classify(text);
             String category = verdict.category() == null ? "SAFE" : verdict.category().name();

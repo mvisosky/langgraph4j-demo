@@ -2,6 +2,7 @@ package com.acme.support.graph;
 
 import com.acme.support.ai.RagAssistants;
 import com.acme.support.config.AgentProperties;
+import com.acme.support.domain.SupportRepository;
 import com.acme.support.observability.AgentMetrics;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -16,8 +17,12 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static com.acme.support.graph.Nodes.*;
@@ -45,11 +50,15 @@ import static org.bsc.langgraph4j.action.AsyncNodeActionWithConfig.node_async;
 @Component
 public class KnowledgeRagSubgraph {
 
+    private static final Pattern ORDER_ID = Pattern.compile("(?i)\\b[A-Z]-\\d{4}\\b");
+    private static final int MAX_ORDERS_IN_CONTEXT = 3;
+
     private final RagAssistants.QueryRewriter rewriter;
     private final RagAssistants.DocumentGrader grader;
     private final RagAssistants.GroundedAnswerWriter writer;
     private final EmbeddingStore<TextSegment> knowledgeStore;
     private final EmbeddingModel embeddingModel;
+    private final SupportRepository repository;
     private final AgentProperties.Rag cfg;
     private final AgentMetrics metrics;
 
@@ -58,6 +67,7 @@ public class KnowledgeRagSubgraph {
                                 RagAssistants.GroundedAnswerWriter writer,
                                 @Qualifier("knowledge") EmbeddingStore<TextSegment> knowledgeStore,
                                 EmbeddingModel embeddingModel,
+                                SupportRepository repository,
                                 AgentProperties props,
                                 AgentMetrics metrics) {
         this.rewriter = rewriter;
@@ -65,6 +75,7 @@ public class KnowledgeRagSubgraph {
         this.writer = writer;
         this.knowledgeStore = knowledgeStore;
         this.embeddingModel = embeddingModel;
+        this.repository = repository;
         this.cfg = props.rag();
         this.metrics = metrics;
     }
@@ -155,14 +166,54 @@ public class KnowledgeRagSubgraph {
     }
 
     Map<String, Object> generateAnswer(SupportState state, RunnableConfig config) {
-        String evidence = String.join("\n---\n", state.strings(DOCUMENTS));
+        String policy = String.join("\n---\n", state.strings(DOCUMENTS));
+        String orders = orderContext(state);
+        String profile = state.str(CUSTOMER_PROFILE).orElse("unknown");
         String draft = writer.answer(
-                state.str(CUSTOMER_PROFILE).orElse("unknown"),
+                profile,
+                orders,
                 String.join("; ", state.strings(MEMORIES)),
                 state.recentTranscript(6),
-                evidence,
+                policy,
                 state.lastUserText());
-        return update("generate_answer: drafted %d chars".formatted(draft.length()), DRAFT, draft, EVIDENCE, evidence);
+        // The critic and reviser see only EVIDENCE. Everything the writer was allowed to use must be in it - the
+        // customer's tier and order facts included - or a correctly personalised answer is flagged as ungrounded
+        // and the reviser strips the personalisation back out.
+        var evidence = new StringBuilder(policy);
+        if (!"unknown".equals(profile)) {
+            evidence.append("\n---\nCustomer profile (from our records): ").append(profile);
+        }
+        if (!"none".equals(orders)) {
+            evidence.append("\n---\nCustomer's order details (from our records):\n").append(orders);
+        }
+        return update("generate_answer: drafted %d chars".formatted(draft.length()), DRAFT, draft, EVIDENCE, evidence.toString());
+    }
+
+    /**
+     * Order facts for orders the customer mentions (this message or the recent conversation). Deterministic and
+     * customer-scoped: {@link SupportRepository#order} only ever returns the authenticated customer's own orders,
+     * so a made-up or someone else's order id simply comes back as "not found".
+     */
+    private String orderContext(SupportState state) {
+        var ids = new LinkedHashSet<String>();
+        var text = state.lastUserText() + "\n" + state.recentTranscript(6);
+        var matcher = ORDER_ID.matcher(text);
+        while (matcher.find() && ids.size() < MAX_ORDERS_IN_CONTEXT) {
+            ids.add(matcher.group().toUpperCase(Locale.ROOT));
+        }
+        if (ids.isEmpty()) {
+            return "none";
+        }
+        try {
+            String customerId = state.customerId();
+            return ids.stream()
+                    .map(id -> repository.order(customerId, id)
+                            .map(o -> o.oneLine() + (o.deliveredAt() == null ? " | not yet delivered" : ""))
+                            .orElse(id + " | not found on this customer's account"))
+                    .collect(Collectors.joining("\n"));
+        } catch (RuntimeException e) {
+            return "none";   // degrade to a policy-only answer rather than failing the turn
+        }
     }
 
     Map<String, Object> noAnswer(SupportState state, RunnableConfig config) {

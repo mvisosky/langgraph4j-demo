@@ -12,6 +12,33 @@ Content-Type: application/json
 
 > {% client.global.set("thread", response.body.threadId); %}
 
+### 1b. Anonymous start: the agent verifies the customer in the chat (email, then the code from the app log)
+# @name startAnon
+POST {{host}}/api/conversations
+Content-Type: application/json
+
+{}
+
+> {% client.global.set("anon", response.body.threadId); %}
+
+###
+POST {{host}}/api/conversations/{{anon}}/messages
+Content-Type: application/json
+
+{ "message": "Hi, where is my order? My email is bob.nguyen@example.com" }
+
+### Replace 123456 with the code logged by the app ("[DEMO] verification code ...")
+POST {{host}}/api/conversations/{{anon}}/messages
+Content-Type: application/json
+
+{ "message": "123456" }
+
+### Now verified: the normal pipeline runs as Bob
+POST {{host}}/api/conversations/{{anon}}/messages
+Content-Type: application/json
+
+{ "message": "Where is my order?" }
+
 ### 2. Knowledge question → corrective RAG sub-graph (rewrite → hybrid retrieve → grade → answer) → critic
 POST {{host}}/api/conversations/{{thread}}/messages
 Content-Type: application/json
